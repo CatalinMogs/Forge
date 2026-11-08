@@ -235,6 +235,118 @@ app.delete("/api/tasks/:id", (req, res) => {
     });
 });
 
+app.get("/api/projects/:projectId/notes", (req, res) => {
+    const notes = db.prepare(
+        "SELECT * FROM notes WHERE project_id = ? ORDER BY created_at DESC"
+    ).all(req.params.projectId);
+
+    res.json(notes);
+});
+
+app.post("/api/projects/:projectId/notes", (req, res) => {
+    const { title, content } = req.body;
+    const projectId = req.params.projectId;
+
+    if (!title || !title.trim()) {
+        return res.status(400).json({
+            error: "Note title is required."
+        });
+    }
+
+    const project = db.prepare(
+        "SELECT * FROM projects WHERE id = ?"
+    ).get(projectId);
+
+    if (!project) {
+        return res.status(404).json({
+            error: "Project not found."
+        });
+    }
+
+    const result = db.prepare(`
+        INSERT INTO notes (project_id, title, content)
+        VALUES (?, ?, ?)
+    `).run(projectId, title.trim(), content || "");
+
+    const note = db.prepare(
+        "SELECT * FROM notes WHERE id = ?"
+    ).get(result.lastInsertRowid);
+
+    res.status(201).json(note);
+});
+
+app.get("/api/notes/:id", (req, res) => {
+    const note = db.prepare(
+        "SELECT * FROM notes WHERE id = ?"
+    ).get(req.params.id);
+
+    if (!note) {
+        return res.status(404).json({
+            error: "Note not found."
+        });
+    }
+
+    res.json(note);
+});
+
+app.put("/api/notes/:id", (req, res) => {
+    const { title, content } = req.body;
+    const noteId = req.params.id;
+
+    const existingNote = db.prepare(
+        "SELECT * FROM notes WHERE id = ?"
+    ).get(noteId);
+
+    if(!existingNote) {
+        return res.status(404).json({
+            error: "Note not found."
+        });
+    }
+
+    if (!title || !title.trim()) {
+        return res.status(400).json({
+            error: "Note title is required."
+        });
+    }
+
+    db.prepare(`
+        UPDATE notes
+        SET title = ?,
+            content = ?,
+            updated_at = CURRENT_TIMESTAMP,
+            version = version + 1
+        WHERE id = ?
+    `).run(
+        title.trim(),
+        content ?? existingNote.content,
+        noteId
+    );
+
+    const updatedNote = db.prepare(
+        "SELECT * FROM notes WHERE id = ?"
+    ).get(noteId);
+
+    res.json(updatedNote);
+});
+
+app.delete("/api/notes/:id", (req, res) => {
+    const noteId = req.params.id;
+
+    const note = db.prepare(
+        "SELECT * FROM notes WHERE id = ?"
+    ).get(noteId);
+
+    if (!note) {
+        return res.status(404).json({
+            error: "Note not found."
+        });
+    }
+
+    db.prepare(
+        "DELETE FROM notes WHERE id = ?"
+    ).run(noteId);
+});
+
 app.listen(PORT, () => {
     console.log(`Forge server running at http://localhost:${PORT}`);
 });
