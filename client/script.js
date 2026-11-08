@@ -1,0 +1,291 @@
+const request = indexedDB.open("ForgeDB", 3);
+
+request.onupgradeneeded = (e) => {
+    const db = e.target.result;
+
+    if (!db.objectStoreNames.contains("projects")) {
+        db.createObjectStore("projects", {
+            keyPath: "id",
+            autoIncrement: true
+        });
+    }
+
+    if (db.objectStoreNames.contains("tasks")) {
+        db.deleteObjectStore("tasks");
+    }
+
+    db.createObjectStore("tasks", {
+        keyPath: "id",
+        autoIncrement: true
+    });
+
+    if (!db.objectStoreNames.contains("notes")) {
+        db.createObjectStore("notes", {
+            keyPath: "id",
+            autoIncrement: true
+        });
+    }
+
+    if (!db.objectStoreNames.contains("operations")) {
+        db.createObjectStore("operations", {
+            keyPath: "id"
+        });
+    }
+
+    console.log("Forge database upgraded!");
+};
+
+let db;
+
+request.onsuccess = (e) => {
+    db = e.target.result;
+
+    console.log("Forge local database connected!");
+};
+
+request.onerror = (e) => {
+    console.error("Database error:", e.target.error);
+};
+
+function addProject(name, description) {
+    const transaction = db.transaction("projects", "readwrite");
+    const store = transaction.objectStore("projects");
+
+    store.add({
+        name: name,
+        description: description,
+        createdAt: new Date().toISOString()
+    });
+
+    transaction.oncomplete = () => {
+        console.log("Project saved locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not save project.");
+    };
+}
+
+function getProjects() {
+    const transaction = db.transaction("projects", "readonly");
+    const store = transaction.objectStore("projects");
+
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+        console.log("Local projects:", request.result);
+    };
+
+    request.onerror = () => {
+        console.error("Could not retrieve projects.");
+    };
+}
+
+function updateProject(id, name, description) {
+    const transaction = db.transaction("projects", "readwrite");
+    const store = transaction.objectStore("projects");
+
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+        const project = request.result;
+
+        if (!project) {
+            console.log("Project not found.");
+            return;
+        }
+
+        project.name = name;
+        project.description = description;
+        project.updatedAt = new Date().toISOString();
+
+        store.put(project);
+    };
+
+    transaction.oncomplete = () => {
+        console.log("Project updated locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not update project.");
+    };
+}
+
+function deleteProject(id) {
+    const transaction = db.transaction("projects", "readwrite");
+    const store = transaction.objectStore("projects");
+
+    store.delete(id);
+
+    transaction.oncomplete = () => {
+        console.log("Project deleted locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not delete projects.");
+    };
+}
+
+function addTask(projectId, title, description, priority) {
+    const transaction = db.transaction("tasks", "readwrite");
+    const store = transaction.objectStore("tasks");
+
+    store.add({
+        projectId: projectId,
+        title: title,
+        description: description,
+        priority: priority || "medium",
+        status: "todo",
+        createdAt: new Date().toISOString()
+    });
+
+    transaction.oncomplete = () => {
+        console.log("Task saved locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not save task.");
+    };
+}
+
+function getTasks() {
+    const transaction = db.transaction("tasks", "readonly");
+    const store = transaction.objectStore("tasks");
+
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+        console.log("Local tasks:", request.result);
+    };
+
+    request.onerror = () => {
+        console.error("Could not retrieve tasks.");
+    };
+}
+
+function updateTask(id, title, description, status, priority) {
+    const transaction = db.transaction("tasks", "readwrite");
+    const store = transaction.objectStore("tasks");
+
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+        const task = request.result;
+
+        if (!task) {
+            console.log("Task not found.");
+            return;
+        }
+
+        task.title = title;
+        task.description = description;
+        task.status = status;
+        task.priority = priority;
+        task.updatedAt = new Date().toISOString();
+
+        store.put(task);
+    };
+
+    transaction.oncomplete = () => {
+        console.log("Task updated locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not update task.");
+    };
+}
+
+function deleteTask(id) {
+    const transaction = db.transaction("tasks", "readwrite");
+    const store = transaction.objectStore("tasks");
+
+    store.delete(id);
+
+    transaction.oncomplete = () => {
+        console.log("Task deleted locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not delete task.");
+    };
+}
+
+function addNote(projectId, title, content) {
+    const transaction = db.transaction("notes", "readwrite");
+    const store = transaction.objectStore("notes");
+
+    store.add({
+        projectId: projectId,
+        title: title,
+        content: content,
+        createdAt: new Date().toISOString()
+    });
+
+    transaction.oncomplete = () => {
+        console.log("Note saved locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not save note.");
+    };
+}
+
+function getNotes() {
+    const transaction = db.transaction("notes", "readonly");
+    const store = transaction.objectStore("notes");
+
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+        console.log("Local notes:", request.result);
+    };
+
+    request.onerror = () => {
+        console.error("Could not retrieve notes.");
+    };
+}
+
+function updateNote(id, title, content) {
+    const transaction = db.transaction("notes", "readwrite");
+    const store = transaction.objectStore("notes");
+
+    const request = store.get(id);
+
+    request.onsuccess = () => {
+        const note = request.result;
+
+        if (!note) {
+            console.log("Note not found.");
+            return;
+        }
+
+        note.title = title;
+        note.content = content;
+        note.updatedAt = new Date().toISOString();
+
+        store.put(note);
+    };
+
+    transaction.oncomplete = () => {
+        console.log("Note updated locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not update note.");
+    };
+}
+
+function deleteNote(id) {
+    const transaction = db.transaction("notes", "readwrite");
+    const store = transaction.objectStore("notes");
+
+    store.delete(id);
+
+    transaction.oncomplete = () => {
+        console.log("Note deleted locally!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not delete note.");
+    };
+}
