@@ -127,24 +127,49 @@ function deleteProject(id) {
 }
 
 function addTask(projectId, title, description, priority) {
-    const transaction = db.transaction("tasks", "readwrite");
-    const store = transaction.objectStore("tasks");
+    const transaction = db.transaction(
+        ["tasks", "operations"],
+        "readwrite"
+    );
 
-    store.add({
+    const taskStore = transaction.objectStore("tasks");
+    const operationStore = transaction.objectStore("operations");
+
+    const task = {
         projectId: projectId,
         title: title,
         description: description,
         priority: priority || "medium",
         status: "todo",
         createdAt: new Date().toISOString()
-    });
+    };
+
+    const taskRequest = taskStore.add(task);
+
+    taskRequest.onsuccess = () => {
+        const taskId = taskRequest.result;
+
+        const operation = {
+            id: crypto.randomUUID(),
+            entityType: "task",
+            entityId: taskId,
+            operationType: "create",
+            payload: task,
+            baseVersion: 0,
+            status: "pending",
+            createdAt: new Date().toISOString()
+        };
+
+        operationStore.add(operation);
+    };
 
     transaction.oncomplete = () => {
         console.log("Task saved locally!");
+        console.log("Task added to synchronization queue!");
     };
 
     transaction.onerror = () => {
-        console.error("Could not save task.");
+        console.error("Could not save task and operation.");
     };
 }
 
@@ -287,5 +312,50 @@ function deleteNote(id) {
 
     transaction.onerror = () => {
         console.error("Could not delete note.");
+    };
+}
+
+function addOperation(entityType, entityId, operationType, payload, baseVersion) {
+    const transaction = db.transaction("operations", "readwrite");
+    const store = transaction.objectStore("operations");
+
+    const operation = {
+        id: crypto.randomUUID(),
+        entityType: entityType,
+        entityId: entityId,
+        operationType: operationType,
+        payload: payload,
+        baseVersion: baseVersion,
+        status: "pending",
+        createdAt: new Date().toISOString()
+    };
+
+    store.add(operation);
+
+    transaction.oncomplete = () => {
+        console.log("Operation added to sync log!", operation);
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not save operation.");
+    };
+}
+
+function getPendingOperations() {
+    const transaction = db.transaction("operations", "readonly");
+    const store = transaction.objectStore("operations");
+
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+        const pending = request.result.filter(
+            operation => operation.status === "pending"
+        );
+
+        console.log("Pending operations:", pending);
+    };
+
+    request.onerror = () => {
+        console.error("Could not retrieve operations.");
     };
 }
