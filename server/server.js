@@ -103,6 +103,107 @@ app.delete("/api/projects/:id", (req, res) => {
     ).run(projectId);
 });
 
+app.post("/api/sync", (req, res) => {
+    const { operations } = req.body;
+
+    if (!Array.isArray(operations)) {
+        return res.status(400).json({
+            error: "Operations must be an array."
+        });
+    }
+
+    const results = operations.map(operation => {
+        try {
+            if (
+                !operation.id ||
+                !operation.entityType ||
+                !operation.entityId ||
+                !operation.operationType ||
+                !operation.payload
+            ) {
+                throw new Error("Invalid operation data.");
+            }
+
+            const existing = db.prepare(`
+                SELECT server_entity_id
+                FROM processed_operations
+                WHERE operation_id = ?
+            `).get(operation.id);
+
+            if (existing) {
+                return {
+                    operationId: operation.id,
+                    status: "already_processed",
+                    serverEntityId: existing.server_entity_id
+                };
+            }
+
+            if (
+                operation.entityType !== "project" ||
+                operation.operationType !== "create"
+            ) {
+                throw new Error("Unsupported operation.");
+            }
+
+            const { name, description } = operation.payload;
+
+            if (!name || !name.trim()) {
+                throw new Error("Project name is required.");
+            }
+
+            const processOperation = db.transaction(() => {
+                const result = db.prepare(`
+                    INSERT INTO projects (name, description)
+                    VALUES (?, ?)
+                `).run(name.trim(), description || "");
+
+                const serverEntityId = result.lastInsertRowid;
+
+                db.prepare(`
+                    INSERT INTO processed_operations (
+                        operation_id,
+                        entity_type,
+                        local_entity_id,
+                        server_entity_id,
+                        operation_type
+                        )
+                        VALUES (?, ?, ?, ?, ?)
+                    `).run(
+                        operation.id,
+                        operation.entityType,
+                        operation.entityId,
+                        serverEntityId,
+                        operation.operationType
+                    );
+
+                    return serverEntityId;
+            });
+
+            const serverEntityId = processOperation();
+
+            return {
+                operationId: operation.id,
+                status: "success",
+                serverEntityId: serverEntityId
+            };
+
+        } catch (error) {
+            console.error("Sync error:", error.message);
+
+            return {
+                operationId: operation.id,
+                status: "failed",
+                error: error.message
+            };
+        }
+    });
+
+    res.json({
+        message: "Synchronization completed.",
+        results
+    });
+});
+
 app.get("/", (req, res) => {
     res.json({
         message: "Welcome to Forge API!",

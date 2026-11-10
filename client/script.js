@@ -359,3 +359,30 @@ function getPendingOperations() {
         console.error("Could not retrieve operations.");
     };
 }
+
+function updateOperationStatus(operationId, newStatus) {
+    const transaction = db.transaction("operations", "readwrite");
+    const store = transaction.objectStore("operations");
+
+    const request = store.get(operationId);
+
+    request.onsuccess = () => {
+        const operation = request.result;
+
+        if (!operation) {
+            console.error("Operation not found.");
+            return;
+        }
+
+        operation.status = newStatus;
+        store.put(operation);
+    };
+
+    transaction.oncomplete = () => {
+        console.log("Operation status updated!");
+    };
+
+    transaction.onerror = () => {
+        console.error("Could not update operation status.");
+    };
+}
