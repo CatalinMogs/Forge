@@ -48,21 +48,48 @@ request.onerror = (e) => {
 };
 
 function addProject(name, description) {
-    const transaction = db.transaction("projects", "readwrite");
-    const store = transaction.objectStore("projects");
+    const transaction = db.transaction(
+        ["projects", "operations"],
+        "readwrite"
+    );
 
-    store.add({
+    const projectStore = transaction.objectStore("projects");
+    const operationStore = transaction.objectStore("operations");
+
+    const project = {
         name: name,
         description: description,
         createdAt: new Date().toISOString()
-    });
+    };
+
+    const projectRequest = projectStore.add(project);
+
+    projectRequest.onsuccess = () => {
+        const projectId = projectRequest.result;
+
+        const operation = {
+            id: crypto.randomUUID(),
+            entityType: "project",
+            entityId: projectId,
+            operationType: "create",
+            payload: {
+                name: name,
+                description: description
+            },
+            baseVersion: 1,
+            status: "pending",
+            createdAt: new Date().toISOString()
+        };
+
+        operationStore.add(operation);
+    };
 
     transaction.oncomplete = () => {
-        console.log("Project saved locally!");
+        console.log("Project saved locally and added to sync queue!");
     };
 
     transaction.onerror = () => {
-        console.error("Could not save project.");
+        console.error("Could not save project and sync operation.");
     };
 }
 
@@ -342,22 +369,26 @@ function addOperation(entityType, entityId, operationType, payload, baseVersion)
 }
 
 function getPendingOperations() {
-    const transaction = db.transaction("operations", "readonly");
-    const store = transaction.objectStore("operations");
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction("operations", "readonly");
+        const store = transaction.objectStore("operations");
 
-    const request = store.getAll();
+        const request = store.getAll();
 
-    request.onsuccess = () => {
-        const pending = request.result.filter(
-            operation => operation.status === "pending"
-        );
+        request.onsuccess = () => {
+            const pending = request.result.filter(
+                operation => operation.status === "pending"
+            );
 
-        console.log("Pending operations:", pending);
-    };
+            console.log("Pending operations:", pending);
+            resolve(pending);
+        };
 
-    request.onerror = () => {
-        console.error("Could not retrieve operations.");
-    };
+        request.onerror = () => {
+            console.error("Could not retrieve operations.");
+            reject(request.error);
+        };
+    });
 }
 
 function updateOperationStatus(operationId, newStatus) {
